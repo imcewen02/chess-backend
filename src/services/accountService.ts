@@ -1,0 +1,55 @@
+import { Request, Response } from "express";
+import accountModel from "../models/accountModel";
+import bcrypt from "bcryptjs";
+import { ApiError } from "../utils/ApiError";
+
+const ASCII_PRINTABLE_REGEX = /^[!-~]+$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+export async function getAllAccounts(req: Request, res: Response): Promise<Response> {
+    const accounts = await accountModel.getAll();
+    return res.status(200).send(accounts);
+}
+
+export async function getAccountByUsername(req: Request, res: Response): Promise<Response> {
+    const username = req.params.username;
+    if (!username) throw new ApiError(400, "username is required");
+
+    const account = await accountModel.getByUsername(username);
+    if (!account) throw new ApiError(404, "User does not exist");
+
+    return res.status(200).send(account);
+}
+
+export async function getUsernameAvailable(req: Request, res: Response): Promise<Response> {
+    const username = req.params.username;
+    if (!username) throw new ApiError(400, "username is required");
+
+    const account = await accountModel.getByUsername(username);
+
+    return res.status(200).send({ usernameAvailable: account == null});
+}
+
+export async function createAccount(req: Request, res: Response): Promise<Response> {
+    const { email, username, password, experience } = req.body as { email: string; username: string; password: string; experience: number; };
+    if (!email || !username || !password || experience === undefined) throw new ApiError(400, "email, username, password, and experience are required");
+
+    if (email.length > 256) throw new ApiError(400, "email must be 256 characters or less");
+    if (!EMAIL_REGEX.test(email)) throw new ApiError(400, "email invalid");
+
+    if (username.length > 32 || username.length < 6) throw new ApiError(400, "username must be between 6 and 32 characters");
+    if (!ASCII_PRINTABLE_REGEX.test(username)) throw new ApiError(400, "username must only contain ASCII printable characters");
+
+    if (password.length > 32 || password.length < 8) throw new ApiError(400, "password must be between 8 and 32 characters");
+    if (!ASCII_PRINTABLE_REGEX.test(password)) throw new ApiError(400, "password must only contain ASCII printable characters");
+
+    if (![0, 1, 2, 3].includes(experience)) throw new ApiError(400, "experience must be between 0 and 3");
+
+    if (await accountModel.getByUsername(username) != null) throw new ApiError(409, "Account already exists");
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const elo = (experience + 1) * 300;
+    await accountModel.insert(username, hashedPassword, elo, email);
+
+    return res.status(201).send();
+}
