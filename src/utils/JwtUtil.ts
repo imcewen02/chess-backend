@@ -17,15 +17,11 @@ export function verifyToken(token: string): boolean {
 }
 
 /**
- * Checks if the token is signed with the correct signature
+ * Fetches the account from a token
  * 
- * @returns true if the token is verified, false otherwise
+ * @returns the account
  */
-export function getAccountFromToken(token: string): Account | null {
-    try {
-        const tokenObj: any = jwt.verify(token, config.JWT_SECRET)
-        return tokenObj.account;
-    } catch (err) {
-        return null;
-    }
+export function getAccountFromToken(token: string): Account {
+    const tokenObj: any = jwt.verify(token, config.JWT_SECRET)
+    return tokenObj.account;
 }

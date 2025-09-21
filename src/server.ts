@@ -24,9 +24,7 @@ httpServer.on("error", (err) => {
 const socketServer = new Server(httpServer, { cors: { origin: config.FRONTEND_ORIGIN } });
 
 socketServer.on("connection", (socket: Socket) => {
-	console.log("USER CONNECTED");
 	registerGameRoutes(socketServer, socket);
-	socket.on("disconnect", () => { console.log("USER DISCONNECTED"); });
 });
 
 socketServer.use((socket, next) => {
@@ -49,4 +47,4 @@ const shutdown = async () => {
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 process.on("unhandledRejection", (reason) => { console.error("Unhandled Rejection:", reason); });
-process.on("uncaughtException", (err) => { console.error("Uncaught Exception:", err); process.exit(1); });
+process.on("uncaughtException", (err) => { console.error("Uncaught Exception:", err); });
