@@ -1,0 +1,31 @@
+import jwt from "jsonwebtoken";
+import config from "../config/config";
+import { Account } from "../models/accountModel";
+
+/**
+ * Checks if the token is signed with the correct signature
+ * 
+ * @returns true if the token is verified, false otherwise
+ */
+export function verifyToken(token: string): boolean {
+    try {
+        jwt.verify(token, config.JWT_SECRET);
+        return true;
+    } catch (err) {
+        return false;
+    }
+}
+
+/**
+ * Checks if the token is signed with the correct signature
+ * 
+ * @returns true if the token is verified, false otherwise
+ */
+export function getAccountFromToken(token: string): Account | null {
+    try {
+        const tokenObj: any = jwt.verify(token, config.JWT_SECRET)
+        return tokenObj.account;
+    } catch (err) {
+        return null;
+    }
+}

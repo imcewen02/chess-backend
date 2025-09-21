@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import accountModel from "../models/accountModel";
 import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import config from "../config/config";
 import { ApiError } from "../utils/ApiError";
 
 const ASCII_PRINTABLE_REGEX = /^[!-~]+$/;
@@ -52,4 +54,20 @@ export async function createAccount(req: Request, res: Response): Promise<Respon
     await accountModel.insert(username, hashedPassword, elo, email);
 
     return res.status(201).send();
+}
+
+export async function login(req: Request, res: Response): Promise<Response> {
+    const { username, password } = req.body as { username: string; password: string };
+    if (!username || !password) throw new ApiError(400, "username and password are required");
+
+    const account = await accountModel.getByUsername(username);
+    if (!account) throw new ApiError(401, "Invalid credentials");
+
+    const passwordCorrect = await bcrypt.compare(password, account.password);
+    if (!passwordCorrect) throw new ApiError(401, "Invalid credentials");
+
+    account.password = "";
+    const token = jwt.sign({ account: account }, config.JWT_SECRET, { expiresIn: "7d" });
+
+    return res.status(200).send({token: token});
 }
