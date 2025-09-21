@@ -4,9 +4,8 @@ import app from "./app";
 import config from "./config/config";
 import DB_POOL from "./config/dbPool";
 import { registerGameRoutes } from "./routes/gameRoutes";
-import {
-	verifyToken
-} from "./utils/JwtUtil";
+import { getAccountFromToken, verifyToken } from "./utils/JwtUtil";
+import { registerConnection, removeConnection } from "./services/socketService";
 
 // Http Server Config
 const httpServer = http.createServer(app);
@@ -24,7 +23,14 @@ httpServer.on("error", (err) => {
 const socketServer = new Server(httpServer, { cors: { origin: config.FRONTEND_ORIGIN } });
 
 socketServer.on("connection", (socket: Socket) => {
+	const accountConnected = getAccountFromToken(socket.handshake.auth.token);
+	registerConnection(accountConnected.username, socket);
+
 	registerGameRoutes(socketServer, socket);
+
+	socket.on("disconnect", () => {
+		removeConnection(accountConnected.username, socket);
+	})
 });
 
 socketServer.use((socket, next) => {

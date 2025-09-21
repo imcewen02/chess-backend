@@ -4,15 +4,22 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import config from "../config/config";
 import { ApiError } from "../utils/ApiError";
+import { getAllActiveGames } from "./gameService";
 
 const ASCII_PRINTABLE_REGEX = /^[!-~]+$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
+/**
+ * Gets all the current accounts registered
+ */
 export async function getAllAccounts(req: Request, res: Response): Promise<Response> {
     const accounts = await accountModel.getAll();
     return res.status(200).send(accounts);
 }
 
+/**
+ * Gets a single account by username
+ */
 export async function getAccountByUsername(req: Request, res: Response): Promise<Response> {
     const username = req.params.username;
     if (!username) throw new ApiError(400, "username is required");
@@ -20,9 +27,13 @@ export async function getAccountByUsername(req: Request, res: Response): Promise
     const account = await accountModel.getByUsername(username);
     if (!account) throw new ApiError(404, "User does not exist");
 
+    account.password = "";
     return res.status(200).send(account);
 }
 
+/**
+ * Checks if the input username is currently available or is taken
+ */
 export async function getUsernameAvailable(req: Request, res: Response): Promise<Response> {
     const username = req.params.username;
     if (!username) throw new ApiError(400, "username is required");
@@ -32,6 +43,9 @@ export async function getUsernameAvailable(req: Request, res: Response): Promise
     return res.status(200).send({ usernameAvailable: account == null});
 }
 
+/**
+ * Validates and registers an account
+ */
 export async function createAccount(req: Request, res: Response): Promise<Response> {
     const { email, username, password, experience } = req.body as { email: string; username: string; password: string; experience: number; };
     if (!email || !username || !password || experience === undefined) throw new ApiError(400, "email, username, password, and experience are required");
@@ -56,6 +70,9 @@ export async function createAccount(req: Request, res: Response): Promise<Respon
     return res.status(201).send();
 }
 
+/**
+ * Logs an account in, returning a jwt token for the account
+ */
 export async function login(req: Request, res: Response): Promise<Response> {
     const { username, password } = req.body as { username: string; password: string };
     if (!username || !password) throw new ApiError(400, "username and password are required");
@@ -70,4 +87,15 @@ export async function login(req: Request, res: Response): Promise<Response> {
     const token = jwt.sign({ account: account }, config.JWT_SECRET, { expiresIn: "7d" });
 
     return res.status(200).send({token: token});
+}
+
+/**
+ * Gets the accounts current active game
+ */
+export async function getAccountsActiveGame(req: Request, res: Response): Promise<Response> {
+    const username = req.params.username;
+
+    const accountsActiveGame = getAllActiveGames().find(game => game.blackAccount.username == username || game.whiteAccount.username == username);
+
+    return res.status(200).send({game: accountsActiveGame});
 }
