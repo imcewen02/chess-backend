@@ -1,10 +1,10 @@
 import { Request, Response } from "express";
-import accountModel from "../models/accountModel";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import config from "../config/config";
 import { ApiError } from "../utils/ApiError";
 import { getAllActiveGames } from "./gameService";
+import accountRepository from "../repositories/accountRepository"
 
 const ASCII_PRINTABLE_REGEX = /^[!-~]+$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -13,7 +13,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
  * Gets all the current accounts registered
  */
 export async function getAllAccounts(req: Request, res: Response): Promise<Response> {
-    const accounts = await accountModel.getAll();
+    const accounts = await accountRepository.getAll();
     return res.status(200).send(accounts);
 }
 
@@ -24,7 +24,7 @@ export async function getAccountByUsername(req: Request, res: Response): Promise
     const username = req.params.username;
     if (!username) throw new ApiError(400, "username is required");
 
-    const account = await accountModel.getByUsername(username);
+    const account = await accountRepository.getByUsername(username);
     if (!account) throw new ApiError(404, "User does not exist");
 
     account.password = "";
@@ -38,7 +38,7 @@ export async function getUsernameAvailable(req: Request, res: Response): Promise
     const username = req.params.username;
     if (!username) throw new ApiError(400, "username is required");
 
-    const account = await accountModel.getByUsername(username);
+    const account = await accountRepository.getByUsername(username);
 
     return res.status(200).send({ usernameAvailable: account == null});
 }
@@ -61,11 +61,11 @@ export async function createAccount(req: Request, res: Response): Promise<Respon
 
     if (![0, 1, 2, 3].includes(experience)) throw new ApiError(400, "experience must be between 0 and 3");
 
-    if (await accountModel.getByUsername(username) != null) throw new ApiError(409, "Account already exists");
+    if (await accountRepository.getByUsername(username) != null) throw new ApiError(409, "Account already exists");
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const elo = (experience + 1) * 300;
-    await accountModel.insert(username, hashedPassword, elo, email);
+    await accountRepository.insert(username, hashedPassword, elo, email);
 
     return res.status(201).send();
 }
@@ -77,7 +77,7 @@ export async function login(req: Request, res: Response): Promise<Response> {
     const { username, password } = req.body as { username: string; password: string };
     if (!username || !password) throw new ApiError(400, "username and password are required");
 
-    const account = await accountModel.getByUsername(username);
+    const account = await accountRepository.getByUsername(username);
     if (!account) throw new ApiError(401, "Invalid credentials");
 
     const passwordCorrect = await bcrypt.compare(password, account.password);

@@ -1,14 +1,8 @@
 import { Pool, QueryResult } from "pg";
+import { Account } from "../models/account"
 import DB_POOL from "../config/dbPool";
 
-export interface Account {
-  username: string;
-  password: string;
-  elo: number;
-  email: string;
-}
-
-export class AccountModel {
+export class AccountRepository {
   private static readonly TABLE = `"Account"`;
 
   constructor(private readonly pool: Pool) {}
@@ -21,7 +15,7 @@ export class AccountModel {
   async getAll(): Promise<Account[]> {
     const query = `
       SELECT username, elo
-      FROM ${AccountModel.TABLE};
+      FROM ${AccountRepository.TABLE};
     `;
 
     const result: QueryResult<Account> = await this.pool.query(query);
@@ -38,7 +32,7 @@ export class AccountModel {
   async getByUsername(username: string): Promise<Account | null> {
     const query = `
       SELECT username, password, email, elo
-      FROM ${AccountModel.TABLE}
+      FROM ${AccountRepository.TABLE}
       WHERE username = $1
       LIMIT 1;
     `;
@@ -55,7 +49,7 @@ export class AccountModel {
    */
   async insert(username: string, passwordHash: string, elo: number, email: string): Promise<void> {
     const query = `
-      INSERT INTO ${AccountModel.TABLE} (username, password, elo, email)
+      INSERT INTO ${AccountRepository.TABLE} (username, password, elo, email)
       VALUES ($1, $2, $3, $4);
     `;
 
@@ -63,5 +57,6 @@ export class AccountModel {
   }
 }
 
-const accountModel = new AccountModel(DB_POOL);
-export default accountModel;
+const accountRepository = new AccountRepository(DB_POOL);
+
+export default accountRepository;

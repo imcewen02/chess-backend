@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import config from "../config/config";
-import { Account } from "../models/accountModel";
+import { Account } from "../models/account";
 
 /**
  * Checks if the token is signed with the correct signature
