@@ -1,15 +1,11 @@
 import { Account } from "./account";
 import { Board } from "./board";
-import { MoveSet } from "./moveSet";
+import { Color } from "./pieces";
 
 export interface Game {
 	uuid: string;
-
-	whiteAccount: Account;
-	blackAccount: Account;
-
+	whitePlayer: Account;
+	blackPlayer: Account;
 	board: Board;
-
-	currentTurn: "white" | "black";
-	currentAvailableMoves: MoveSet[];
+	currentTurn: Color;
 }

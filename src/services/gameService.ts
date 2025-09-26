@@ -3,8 +3,8 @@ import { Account } from "../models/account";
 import { Game } from "../models/game";
 import { Board } from '../models/board';
 import { getUsersConnections, emitToUser } from "./socketService";
-import { getAccountsActiveGame } from './accountService';
 import { Position } from '../models/position';
+import { Color } from '../models/pieces';
 
 var accountsInQueue: Account[] = [];
 var activeGames: Game[] = [];
@@ -17,7 +17,7 @@ var activeGames: Game[] = [];
  */
 export function joinQueue(account: Account): void {
     const accountAlreadyInQueue = accountsInQueue.find(accountInQueue => accountInQueue.username == account.username) != undefined;
-    const accountAlreadyInGame = activeGames.find(game => game.whiteAccount.username == account.username || game.blackAccount.username == account.username) != undefined;
+    const accountAlreadyInGame = activeGames.find(game => game.whitePlayer.username == account.username || game.blackPlayer.username == account.username) != undefined;
     if (accountAlreadyInQueue || accountAlreadyInGame) return;
 
     accountsInQueue.push(account);
@@ -33,25 +33,24 @@ export function joinQueue(account: Account): void {
 /**
  * Creates a new game with the specified users
  *
- * @param account1: the account of player 1
- * @param account2: the account of player 2
+ * @param whitePlayer: the account of the white player
+ * @param blackPlayer: the account of the black player
  */
-export function startGame(account1: Account, account2: Account): void {
+export function startGame(whitePlayer: Account, blackPlayer: Account): void {
     const board = new Board();
 
     const game: Game = {
         uuid: uuidv4(),
-        whiteAccount: account1,
-        blackAccount: account2,
+        whitePlayer: whitePlayer,
+        blackPlayer: blackPlayer,
         board: board,
-        currentTurn: "white",
-        currentAvailableMoves: board.getCurrentMoveOptions("white")
+        currentTurn: Color.White
     }
 
     activeGames.push(game);
 
-    emitToUser(account1.username, "games:gameUpdate", game);
-    emitToUser(account2.username, "games:gameUpdate", game);
+    emitToUser(whitePlayer.username, "games:gameUpdate", game);
+    emitToUser(blackPlayer.username, "games:gameUpdate", game);
 }
 
 /**
@@ -63,13 +62,22 @@ export function getAllActiveGames(): Game[] {
     return activeGames;
 }
 
-export function movePiece(accountMoving: Account, origin: Position, destination: Position) {
-    const game = activeGames.find(game => game.whiteAccount.username == accountMoving.username || game.blackAccount.username == accountMoving.username);
+/**
+ * Moves a the piece at the origin to the destination
+ *
+ * @param playerMoving: the account of the player making the move
+ * @param origin: the origin of the moving piece
+ * @param destination: the destination of the moving piece
+ */
+export function movePiece(playerMoving: Account, origin: Position, destination: Position) {
+    const game = activeGames.find(game => game.whitePlayer.username == playerMoving.username || game.blackPlayer.username == playerMoving.username);
+    if (game == null) throw new Error("Game Not Found");
 
-    game!.board.movePiece(origin, destination);
-    game!.currentTurn = game?.currentTurn == "white" ? "black" : "white";
-    game!.currentAvailableMoves = game!.board.getCurrentMoveOptions(game!.currentTurn);
+    //TODO check that the player moving the piece is allowed to do so (their turn and also their piece)
 
-    emitToUser(game!.whiteAccount.username, "games:gameUpdate", game);
-    emitToUser(game!.blackAccount.username, "games:gameUpdate", game);
+    game.board.movePiece(origin, destination, true);
+    game.currentTurn = game.currentTurn == Color.White ? Color.Black : Color.White;
+
+    emitToUser(game.whitePlayer.username, "games:gameUpdate", game);
+    emitToUser(game.blackPlayer.username, "games:gameUpdate", game);
 }

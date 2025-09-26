@@ -95,7 +95,7 @@ export async function login(req: Request, res: Response): Promise<Response> {
 export async function getAccountsActiveGame(req: Request, res: Response): Promise<Response> {
     const username = req.params.username;
 
-    const accountsActiveGame = getAllActiveGames().find(game => game.blackAccount.username == username || game.whiteAccount.username == username);
+    const accountsActiveGame = getAllActiveGames().find(game => game.blackPlayer.username == username || game.whitePlayer.username == username);
 
     return res.status(200).send({game: accountsActiveGame});
 }

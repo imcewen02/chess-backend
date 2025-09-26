@@ -1,9 +1,10 @@
-import { ApiError } from "../utils/ApiError";
-import { MoveSet } from "./moveSet";
-import { BBishop, BKing, BKnight, BPawn, BQueen, BRook, Piece, WBishop, WKing, WKnight, WPawn, WQueen, WRook } from "./piece";
+import { Bishop, Color, King, Knight, Pawn, Piece, Queen, Rook } from "./pieces";
 import { Position } from "./position";
 
 export class Board {
+    public readonly ranks = [1, 2, 3, 4, 5, 6, 7, 8];
+    public readonly files = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+
     private squares: (Piece | null) [][];
 
     constructor() {
@@ -20,26 +21,14 @@ export class Board {
     }
 
     /**
-     * Gets all legal moves of a given color based on the current state of the board
+     * Clones the existing board for consequence free muatations, guranteed!
      * 
-     * @param color: the color to fetch all moves for
+     * @returns the cloned board
      */
-    public getCurrentMoveOptions(color: "white" | "black"): MoveSet[] {
-        const moveOptions: MoveSet[] = [];
-
-        for (let rowIdx = 0; rowIdx < 8; rowIdx++) {
-            for (let colIdx = 0; colIdx < 8; colIdx++) {
-                const position = {row: rowIdx, col: colIdx};
-                const pieceAtPosition = this.getPieceAtPosition(position);
-                if (pieceAtPosition == null || pieceAtPosition.color != color) continue;
-                moveOptions.push({
-                    origin: position,
-                    destinations: this.getMovesFromPosition(position, true)
-                })
-            }
-        }
-
-        return moveOptions;
+    public clone(): Board {
+        const newBoard = new Board();
+        newBoard.squares = this.squares.map(rank => rank.map(piece => piece ?  piece.clone() : null));
+        return newBoard;
     }
 
     /**
@@ -47,16 +36,15 @@ export class Board {
      * 
      * @param origin the origin of the moving piece
      * @param destination the destination of the moveing piece
+     * @param checkLegal wether to check that the move is legal and check safe (should only be used for simulated moves)
      */
-    public movePiece(origin: Position, destination: Position): void {
+    public movePiece(origin: Position, destination: Position, checkLegal: boolean): void {
         const movingPiece = this.getPieceAtPosition(origin);
-        if (movingPiece == null) throw new ApiError(400, "Move Illegal");
+        if (movingPiece == null) throw new Error("No Piece at Origin");
+        if (checkLegal && !movingPiece.getAvailableMoves(this, true)!.some(move => move.rank == destination.rank && move.file == destination.file)) throw new Error("Move Is Illegal");
 
-        const legalMoves = this.getMovesFromPosition(origin, true);
-        if (!legalMoves.some(position => position.row == destination.row && position.col == destination.col)) throw new ApiError(400, "Move Illegal");
-
-        this.squares[destination.row][destination.col] = this.getPieceAtPosition(origin);
-        this.squares[origin.row][origin.col] = null;
+        this.squares[destination.rank - 1][this.fileToNum(destination.file)] = movingPiece;
+        this.squares[origin.rank - 1][this.fileToNum(origin.file)] = null;
     }
 
     /**
@@ -66,37 +54,27 @@ export class Board {
      * 
      * @returns wether the position is valid or not
      */
-    private isPositionValid(position: Position): boolean {
-        return 0 <= position.col && position.col < 8 && 0 <= position.row && position.row < 8
+    public isPositionValid(position: Position): boolean {
+        return this.ranks.includes(position.rank) && this.files.includes(position.file);
     }
 
     /**
-     * Checks if the given king of the given color is currently in check or not
-     *
-     * @param color: the color of the king to check
+     * Finds the position of the piece by reference
      * 
-     * @returns wether the king is in check or not
+     * @param picee: the piece to find
+     * 
+     * @returns the position of the piece or null if the piece is not found
      */
-    private isKingInCheck(color: "white" | "black"): boolean {
-        const opposingPiecesRange: Position[] = [];
-        let kingsPosition: Position = null!;
-
-        for (let rowIdx = 0; rowIdx < 8; rowIdx++) {
-            for (let colIdx = 0; colIdx < 8; colIdx++) {
-                const pieceAtPosition = this.getPieceAtPosition({row: rowIdx, col: colIdx});
-                if (pieceAtPosition == null) continue;
-
-                if (pieceAtPosition.color != color) {
-                    opposingPiecesRange.push(...this.getMovesFromPosition({row: rowIdx, col: colIdx}, false));
-                }
-
-                if (pieceAtPosition.name == "king" && pieceAtPosition.color == color) {
-                    kingsPosition = {row: rowIdx, col: colIdx};
-                }
+    public getPositionOfPiece(picee: Piece): Position | null {
+        for (let rank of this.ranks) {
+            for (let file of this.files) {
+                const position: Position = {rank: rank, file: file};
+                const pieceAtPosition = this.getPieceAtPosition(position);
+                if (pieceAtPosition == picee) return position;
             }
         }
 
-        return opposingPiecesRange.some(position => position.row == kingsPosition.row && position.col == kingsPosition.col);
+        return null;
     }
 
     /**
@@ -107,225 +85,94 @@ export class Board {
      * 
      * @returns the piece at the given position or null
      */
-    private getPieceAtPosition(position: Position): Piece | null {
-        return this.isPositionValid(position) ? this.squares[position.row][position.col] : null;
+    public getPieceAtPosition(position: Position): Piece | null {
+        return this.isPositionValid(position) ? this.squares[position.rank - 1][this.fileToNum(position.file)] : null;
     }
 
     /**
-     * Feteches the piece at the specfied position and returns the pieces possible moves.
-     * Will filter out moves putting the picees king into check if checkSafe is enabled
-     * Silently handles invalid positions by returning an empty list
+     * Checks if the king of the given color is currently in check
+     *
+     * @param color: the color of the king to check
      * 
-     * @param position: the position to get the piece from
-     * @param checkSafe: if true, will filter out moves putting the pieces king into check
-     * 
-     * @returns all moves the piece at the given position can take (making sure they do not cause check if enabled)
+     * @returns if the king is in check
      */
-    private getMovesFromPosition(position: Position, checkSafe: boolean): Position[] {
-        const movingPiece = this.getPieceAtPosition(position);
-        if (movingPiece == null) return [];
-
-        let possibleMoves: Position[] = [];
-        switch (movingPiece.name) {
-            case "pawn": possibleMoves = this.getPawnMovesFromPosition(movingPiece.color, position); break;
-            case "rook": possibleMoves = this.getRookMovesFromPosition(movingPiece.color, position); break;
-            case "knight": possibleMoves = this.getKnightMovesFromPosition(movingPiece.color, position); break;
-            case "bishop": possibleMoves = this.getBishopMovesFromPosition(movingPiece.color, position); break;
-            case "queen": possibleMoves = this.getQueenMovesFromPosition(movingPiece.color, position); break;
-            case "king": possibleMoves = this.getKingMovesFromPosition(movingPiece.color, position); break;
-        }
-
-        if (!checkSafe) return possibleMoves;
-
-        possibleMoves = possibleMoves.filter( move => {
-            const simulatedBoard = this.clone();
-            simulatedBoard.squares[move.row][move.col] = simulatedBoard.squares[position.row][position.col];
-            simulatedBoard.squares[position.row][position.col] = null;
-            return !simulatedBoard.isKingInCheck(movingPiece.color);
-        });
-
-        return possibleMoves;
-    }
-
-    /**
-     * Fetches the possible moves a pawn of the given color could do from the given position.
-     * Does not consider if the piece is protecting the king
-     * 
-     * @param color: the color of the moving piece
-     * @param position: the origin of the moving piece
-     * 
-     * @returns all possible moves the pawn could achieve
-     */
-    private getPawnMovesFromPosition(color: "white" | "black", position: Position): Position[] {
-        const possibleMoves: Position[] = [];
-
-        const forwardMove = {row: color == "white" ? position.row + 1 : position.row - 1, col: position.col};
-        if (this.isPositionValid(forwardMove) && this.getPieceAtPosition(forwardMove) == null) {
-            possibleMoves.push(forwardMove);
-
-            const doubleForwardMove = {row: color == "white" ? position.row + 2 : position.row - 2, col: position.col};
-            if (((color == "white" && position.row == 1) || (color == "black" && position.row == 6)) &&this.getPieceAtPosition(doubleForwardMove) == null) {
-                possibleMoves.push(doubleForwardMove);
+    public isKingInCheck(color: Color): boolean {
+        let kingsPosition: Position = null!;
+        for (let rank of this.ranks) {
+            for (let file of this.files) {
+                const position: Position = {rank: rank, file: file};
+                const pieceAtPosition = this.getPieceAtPosition(position);
+                if (pieceAtPosition && pieceAtPosition.color == color && pieceAtPosition instanceof King) kingsPosition = position;
             }
         }
 
-        const captureLeftMove = {row: color == "white" ? position.row + 1 : position.row - 1, col: position.col + 1};
-        if (this.isPositionValid(captureLeftMove) && this.getPieceAtPosition(captureLeftMove) != null && this.getPieceAtPosition(captureLeftMove)?.color != color) {
-            possibleMoves.push(captureLeftMove);
-        }
-
-        const captureRightMove = {row: color == "white" ? position.row + 1 : position.row - 1, col: position.col - 1};
-        if (this.isPositionValid(captureRightMove) && this.getPieceAtPosition(captureRightMove) != null && this.getPieceAtPosition(captureRightMove)?.color != color) {
-            possibleMoves.push(captureRightMove);
-        }
-
-        return possibleMoves;
-    }
-
-    /**
-     * Fetches the possible moves a rook of the given color could do from the given position.
-     * Does not consider if the piece is protecting the king
-     * 
-     * @param color: the color of the moving piece
-     * @param position: the origin of the moving piece
-     * 
-     * @returns all possible moves the rook could achieve
-     */
-    private getRookMovesFromPosition(color: "white" | "black", position: Position): Position[] {
-        const possibleMoves: Position[] = [];
-
-        const moveDirections: Position[] = [{row: 1, col: 0}, {row: -1, col: 0}, {row: 0, col: 1}, {row: 0, col: -1}]
-        for (let moveDirection of moveDirections) {
-            let movePosition = {row: position.row + moveDirection.row, col: position.col + moveDirection.col};
-            while (this.isPositionValid(movePosition)) {
-                const pieceAtMovePosition = this.getPieceAtPosition(movePosition);
-                if (pieceAtMovePosition != null) {
-                    if (pieceAtMovePosition.color != color) possibleMoves.push(movePosition);
-                    break;
-                } else {
-                    possibleMoves.push(movePosition)
-                }
-                movePosition = {row: movePosition.row + moveDirection.row, col: movePosition.col + moveDirection.col};
+        for (let rank of this.ranks) {
+            for (let file of this.files) {
+                const position: Position = {rank: rank, file: file};
+                const pieceAtPosition = this.getPieceAtPosition(position);
+                if (pieceAtPosition && pieceAtPosition.color != color && pieceAtPosition.getAvailableMoves(this, false)?.some(move => move.rank == kingsPosition.rank && move.file == kingsPosition.file)) return true;
             }
         }
 
-        return possibleMoves;
+        return false;
     }
 
     /**
-     * Fetches the possible moves a knight of the given color could do from the given position.
-     * Does not consider if the piece is protecting the king
+     * Checks if the king of the given color is currently in checkmate
+     *
+     * @param color: the color of the king to check
      * 
-     * @param color: the color of the moving piece
-     * @param position: the origin of the moving piece
-     * 
-     * @returns all possible moves the knight could achieve
+     * @returns if the king is in checkmate
      */
-    private getKnightMovesFromPosition(color: "white" | "black", position: Position): Position[] {
-        const possibleMoves: Position[] = [];
+    public isKingInCheckmate(color: Color): boolean {
+        if (!this.isKingInCheck(color)) return false;
 
-        const moves: Position[] = [{row: 2, col: 1}, {row: 2, col: -1}, {row: 1, col: 2}, {row: 1, col: -2}, {row: -2, col: 1}, {row: -2, col: -1}, {row: -1, col: 2}, {row: -1, col: -2}]
-        for (let move of moves) {
-            let movePosition = {row: position.row + move.row, col: position.col + move.col};
-            if (!this.isPositionValid(movePosition)) continue;
-            const pieceAtMovePosition = this.getPieceAtPosition(movePosition);
-            if (pieceAtMovePosition == null || pieceAtMovePosition.color != color) possibleMoves.push(movePosition);
-        }
-
-        return possibleMoves;
-    }
-
-    /**
-     * Fetches the possible moves a bishop of the given color could do from the given position.
-     * Does not consider if the piece is protecting the king
-     * 
-     * @param color: the color of the moving piece
-     * @param position: the origin of the moving piece
-     * 
-     * @returns all possible moves the bishop could achieve
-     */
-    private getBishopMovesFromPosition(color: "white" | "black", position: Position): Position[] {
-        const possibleMoves: Position[] = [];
-
-        const moveDirections: Position[] = [{row: 1, col: 1}, {row: 1, col: -1}, {row: -1, col: 1}, {row: -1, col: -1}]
-        for (let moveDirection of moveDirections) {
-            let movePosition = {row: position.row + moveDirection.row, col: position.col + moveDirection.col};
-            while (this.isPositionValid(movePosition)) {
-                const pieceAtMovePosition = this.getPieceAtPosition(movePosition);
-                if (pieceAtMovePosition != null) {
-                    if (pieceAtMovePosition.color != color) possibleMoves.push(movePosition);
-                    break;
-                } else {
-                    possibleMoves.push(movePosition);
-                }
-                movePosition = {row: movePosition.row + moveDirection.row, col: movePosition.col + moveDirection.col};
+        for (let rank of this.ranks) {
+            for (let file of this.files) {
+                const position: Position = {rank: rank, file: file};
+                const pieceAtPosition = this.getPieceAtPosition(position);
+                if (pieceAtPosition && pieceAtPosition.color == color && pieceAtPosition.getAvailableMoves(this, true)!.length > 0) return false; //if there is any legal move, the king is not in checkmate
             }
         }
 
-        return possibleMoves;
+        return true;
     }
 
     /**
-     * Fetches the possible moves a queen of the given color could do from the given position.
-     * Does not consider if the piece is protecting the king
+     * Converts a file from its string representation to its numeric representation
+     * Will return -1 if the file is not found
+     *
+     * @param file: the file to find
      * 
-     * @param color: the color of the moving piece
-     * @param position: the origin of the moving piece
-     * 
-     * @returns all possible moves the queen could achieve
+     * @returns the numerice representation of the file (or -1 if its not found)
      */
-    private getQueenMovesFromPosition(color: "white" | "black", position: Position): Position[] {
-        const possibleMoves: Position[] = [];
-
-        const moveDirections: Position[] = [{row: 1, col: 0}, {row: -1, col: 0}, {row: 0, col: 1}, {row: 0, col: -1}, {row: 1, col: 1}, {row: 1, col: -1}, {row: -1, col: 1}, {row: -1, col: -1}]
-        for (let moveDirection of moveDirections) {
-            let movePosition = {row: position.row + moveDirection.row, col: position.col + moveDirection.col};
-            while (this.isPositionValid(movePosition)) {
-                const pieceAtMovePosition = this.getPieceAtPosition(movePosition);
-                if (pieceAtMovePosition != null) {
-                    if (pieceAtMovePosition.color != color) possibleMoves.push(movePosition);
-                    break;
-                } else {
-                    possibleMoves.push(movePosition);
-                }
-                movePosition = {row: movePosition.row + moveDirection.row, col: movePosition.col + moveDirection.col};
-            }
-        }
-
-        return possibleMoves;
+    public fileToNum(file: string): number {
+        return this.files.indexOf(file);
     }
 
     /**
-     * Fetches the possible moves a king of the given color could do from the given position.
-     * Does not Does not consider if this puts the king into check
+     * Converts a file from its numeric representation to its string representation
+     * Will return "" if the file is not found
+     *
+     * @param file: the file to find
      * 
-     * @param color: the color of the moving piece
-     * @param position: the origin of the moving piece
-     * 
-     * @returns all possible moves the king could achieve
+     * @returns the string representation of the file (or "" if its not found)
      */
-    private getKingMovesFromPosition(color: "white" | "black", position: Position): Position[] {
-        const possibleMoves: Position[] = [];
-
-        const moves: Position[] = [{row: 1, col: 0}, {row: -1, col: 0}, {row: 0, col: 1}, {row: 0, col: -1}, {row: 1, col: 1}, {row: 1, col: -1}, {row: -1, col: 1}, {row: -1, col: -1}]
-        for (let move of moves) {
-            let movePosition = {row: position.row + move.row, col: position.col + move.col};
-            if (!this.isPositionValid(movePosition)) continue;
-            const pieceAtMovePosition = this.getPieceAtPosition(movePosition);
-            if (pieceAtMovePosition == null || pieceAtMovePosition.color != color) possibleMoves.push(movePosition);
-        }
-
-        return possibleMoves;
-    }
-
-    /**
-     * Clones the existing board for consequence free muatations, guranteed!
-     * 
-     * @returns the cloned board
-     */
-    private clone(): Board {
-        const newBoard = new Board();
-        newBoard.squares = this.squares.map( row => row.map(piece => piece ? { ...piece } : null) );
-        return newBoard;
+    public numToFile(num: number): string {
+        return 0 <= num && num < this.files.length ? this.files[num] : "";
     }
 }
+
+//Piece Factories
+const WPawn = (): Piece => (new Pawn(Color.White));
+const WRook = (): Piece => (new Rook(Color.White));
+const WKnight = (): Piece => (new Knight(Color.White));
+const WBishop = (): Piece => (new Bishop(Color.White));
+const WQueen = (): Piece => (new Queen(Color.White));
+const WKing = (): Piece => (new King(Color.White));
+const BPawn = (): Piece => (new Pawn(Color.Black));
+const BRook = (): Piece => (new Rook(Color.Black));
+const BKnight = (): Piece => (new Knight(Color.Black));
+const BBishop = (): Piece => (new Bishop(Color.Black));
+const BQueen = (): Piece => (new Queen(Color.Black));
+const BKing = (): Piece => (new King(Color.Black));
