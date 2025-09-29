@@ -1,13 +1,22 @@
 import { v4 as uuidv4 } from 'uuid';
+import { getUsersConnections, emitToUser } from "./socketService";
 import { Account } from "../models/account";
 import { Game } from "../models/game";
 import { Board } from '../models/board';
-import { getUsersConnections, emitToUser } from "./socketService";
 import { Position } from '../models/position';
 import { Color } from '../models/pieces';
 
 var accountsInQueue: Account[] = [];
 var activeGames: Game[] = [];
+
+/**
+ * Returns all active games
+ *
+ * @returns all active games
+ */
+export function getAllActiveGames(): Game[] {
+    return activeGames;
+}
 
 /**
  * Adds the given account to the queue unless the account is already in queue
@@ -37,14 +46,21 @@ export function joinQueue(account: Account): void {
  * @param blackPlayer: the account of the black player
  */
 export function startGame(whitePlayer: Account, blackPlayer: Account): void {
-    const board = new Board();
+    const board = new Board(null);
 
     const game: Game = {
         uuid: uuidv4(),
+
         whitePlayer: whitePlayer,
+        whiteTimeRemaining: 300000,
+
         blackPlayer: blackPlayer,
+        blackTimeRemaining: 300000,
+
         board: board,
-        currentTurn: Color.White
+
+        currentTurn: Color.White,
+        currentTurnSince: Date.now()
     }
 
     activeGames.push(game);
@@ -54,29 +70,32 @@ export function startGame(whitePlayer: Account, blackPlayer: Account): void {
 }
 
 /**
- * Returns all active games
- *
- * @returns all active games
- */
-export function getAllActiveGames(): Game[] {
-    return activeGames;
-}
-
-/**
  * Moves a the piece at the origin to the destination
  *
  * @param playerMoving: the account of the player making the move
  * @param origin: the origin of the moving piece
  * @param destination: the destination of the moving piece
  */
-export function movePiece(playerMoving: Account, origin: Position, destination: Position) {
+export function movePiece(playerMoving: Account, origin: Position, destination: Position): void {
     const game = activeGames.find(game => game.whitePlayer.username == playerMoving.username || game.blackPlayer.username == playerMoving.username);
     if (game == null) throw new Error("Game Not Found");
 
-    //TODO check that the player moving the piece is allowed to do so (their turn and also their piece)
+    const playersColor = game.whitePlayer.username == playerMoving.username ? Color.White : Color.Black;
+    const timeSpentOnTurn = Date.now() - game.currentTurnSince;
+    if (game.board.getPieceAtPosition(origin)?.color != playersColor) throw new Error("Unauthorized: Not your piece");
+    if (game.currentTurn != playersColor) throw new Error("Unauthorized: Not your turn");
+    if ((game.currentTurn == Color.White ? game.whiteTimeRemaining : game.blackTimeRemaining) < timeSpentOnTurn) throw new Error("Unauthorized: No Time Remaining");
 
     game.board.movePiece(origin, destination, true);
+    
+    if (game.currentTurn == Color.White) {
+        game.whiteTimeRemaining = game.whiteTimeRemaining - timeSpentOnTurn;
+    } else {
+        game.blackTimeRemaining = game.blackTimeRemaining - timeSpentOnTurn;
+    }
+
     game.currentTurn = game.currentTurn == Color.White ? Color.Black : Color.White;
+    game.currentTurnSince = Date.now();
 
     emitToUser(game.whitePlayer.username, "games:gameUpdate", game);
     emitToUser(game.blackPlayer.username, "games:gameUpdate", game);

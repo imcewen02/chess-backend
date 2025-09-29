@@ -276,3 +276,18 @@ export enum Name {
     Queen = "queen",
     King = "king"
 }
+
+//Piece Factories
+export const WPawn = (): Piece => (new Pawn(Color.White));
+export const WRook = (): Piece => (new Rook(Color.White));
+export const WKnight = (): Piece => (new Knight(Color.White));
+export const WBishop = (): Piece => (new Bishop(Color.White));
+export const WQueen = (): Piece => (new Queen(Color.White));
+export const WKing = (): Piece => (new King(Color.White));
+
+export const BPawn = (): Piece => (new Pawn(Color.Black));
+export const BRook = (): Piece => (new Rook(Color.Black));
+export const BKnight = (): Piece => (new Knight(Color.Black));
+export const BBishop = (): Piece => (new Bishop(Color.Black));
+export const BQueen = (): Piece => (new Queen(Color.Black));
+export const BKing = (): Piece => (new King(Color.Black));

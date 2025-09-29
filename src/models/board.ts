@@ -1,4 +1,4 @@
-import { Bishop, Color, King, Knight, Pawn, Piece, Queen, Rook } from "./pieces";
+import { BBishop, BKing, BKnight, BPawn, BQueen, BRook, Color, King, Name, Piece, WBishop, WKing, WKnight, WPawn, WQueen, WRook } from "./pieces";
 import { Position } from "./position";
 
 export class Board {
@@ -7,17 +7,34 @@ export class Board {
 
     private squares: (Piece | null) [][];
 
-    constructor() {
-        this.squares = [
-            [WRook(), WKnight(), WBishop(), WQueen(), WKing(), WBishop(), WKnight(), WRook()],
-            [WPawn(), WPawn(), WPawn(), WPawn(), WPawn(), WPawn(), WPawn(), WPawn()],
-            [null, null, null, null, null, null, null, null],
-            [null, null, null, null, null, null, null, null],
-            [null, null, null, null, null, null, null, null],
-            [null, null, null, null, null, null, null, null],
-            [BPawn(), BPawn(), BPawn(), BPawn(), BPawn(), BPawn(), BPawn(), BPawn()],
-            [BRook(), BKnight(), BBishop(), BQueen(), BKing(), BBishop(), BKnight(), BRook()]
-        ]
+    constructor(jsonSquares: (Piece | null) [][] | null) {
+		if (jsonSquares) {
+			this.squares = jsonSquares.map(rank =>
+				rank.map(pieceJson => {
+					if (!pieceJson) return null;
+					switch (pieceJson.name) {
+						case Name.Pawn: return pieceJson.color == Color.White ? WPawn() : BPawn();
+						case Name.Rook: return pieceJson.color == Color.White ? WRook() : BRook();
+						case Name.Knight: return pieceJson.color == Color.White ? WKnight() : BKnight();
+						case Name.Bishop: return pieceJson.color == Color.White ? WBishop() : BBishop();
+						case Name.Queen: return pieceJson.color == Color.White ? WQueen() : BQueen();
+						case Name.King: return pieceJson.color == Color.White ? WKing() : BKing();
+						default: throw new Error(`Unknown piece type: ${pieceJson.name}`);
+					}
+				})
+			);
+		} else {
+			this.squares = [
+				[WRook(), WKnight(), WBishop(), WQueen(), WKing(), WBishop(), WKnight(), WRook()],
+				[WPawn(), WPawn(), WPawn(), WPawn(), WPawn(), WPawn(), WPawn(), WPawn()],
+				[null, null, null, null, null, null, null, null],
+				[null, null, null, null, null, null, null, null],
+				[null, null, null, null, null, null, null, null],
+				[null, null, null, null, null, null, null, null],
+				[BPawn(), BPawn(), BPawn(), BPawn(), BPawn(), BPawn(), BPawn(), BPawn()],
+				[BRook(), BKnight(), BBishop(), BQueen(), BKing(), BBishop(), BKnight(), BRook()]
+			]
+		}
     }
 
     /**
@@ -26,8 +43,7 @@ export class Board {
      * @returns the cloned board
      */
     public clone(): Board {
-        const newBoard = new Board();
-        newBoard.squares = this.squares.map(rank => rank.map(piece => piece ?  piece.clone() : null));
+        const newBoard = new Board(this.squares);
         return newBoard;
     }
 
@@ -61,16 +77,16 @@ export class Board {
     /**
      * Finds the position of the piece by reference
      * 
-     * @param picee: the piece to find
+     * @param piece: the piece to find
      * 
      * @returns the position of the piece or null if the piece is not found
      */
-    public getPositionOfPiece(picee: Piece): Position | null {
+    public getPositionOfPiece(piece: Piece): Position | null {
         for (let rank of this.ranks) {
             for (let file of this.files) {
                 const position: Position = {rank: rank, file: file};
                 const pieceAtPosition = this.getPieceAtPosition(position);
-                if (pieceAtPosition == picee) return position;
+                if (pieceAtPosition == piece) return position;
             }
         }
 
@@ -87,6 +103,27 @@ export class Board {
      */
     public getPieceAtPosition(position: Position): Piece | null {
         return this.isPositionValid(position) ? this.squares[position.rank - 1][this.fileToNum(position.file)] : null;
+    }
+
+    /**
+     * Feteches all the pieces of the given color
+     * 
+     * @param color: The color of the pieces to get
+     * 
+     * @returns the pieces of the given color
+     */
+    public getPiecesByColor(color: Color): Piece[] {
+        const piecesOfColor: Piece[] = [];
+
+        for (let rank of this.ranks) {
+            for (let file of this.files) {
+                const position: Position = {rank: rank, file: file};
+                const pieceAtPosition = this.getPieceAtPosition(position);
+                if (pieceAtPosition?.color == color) piecesOfColor.push(pieceAtPosition);
+            }
+        }
+
+        return piecesOfColor;
     }
 
     /**
@@ -162,17 +199,3 @@ export class Board {
         return 0 <= num && num < this.files.length ? this.files[num] : "";
     }
 }
-
-//Piece Factories
-const WPawn = (): Piece => (new Pawn(Color.White));
-const WRook = (): Piece => (new Rook(Color.White));
-const WKnight = (): Piece => (new Knight(Color.White));
-const WBishop = (): Piece => (new Bishop(Color.White));
-const WQueen = (): Piece => (new Queen(Color.White));
-const WKing = (): Piece => (new King(Color.White));
-const BPawn = (): Piece => (new Pawn(Color.Black));
-const BRook = (): Piece => (new Rook(Color.Black));
-const BKnight = (): Piece => (new Knight(Color.Black));
-const BBishop = (): Piece => (new Bishop(Color.Black));
-const BQueen = (): Piece => (new Queen(Color.Black));
-const BKing = (): Piece => (new King(Color.Black));
