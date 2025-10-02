@@ -1,20 +1,21 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getUsersConnections, emitToUser } from "./socketService";
 import { Account } from "../models/account";
-import { Game } from "../models/game";
+import { Game, State } from "../models/game";
 import { Board } from '../models/board';
 import { Position } from '../models/position';
 import { Color } from '../models/pieces';
 
 var accountsInQueue: Account[] = [];
-var activeGames: Game[] = [];
+const activeGames = new Map<string, Game>();
+const gameTimeouts = new Map<string, NodeJS.Timeout>();
 
 /**
  * Returns all active games
  *
  * @returns all active games
  */
-export function getAllActiveGames(): Game[] {
+export function getAllActiveGames(): Map<string, Game> {
     return activeGames;
 }
 
@@ -26,8 +27,8 @@ export function getAllActiveGames(): Game[] {
  */
 export function joinQueue(account: Account): void {
     const accountAlreadyInQueue = accountsInQueue.find(accountInQueue => accountInQueue.username == account.username) != undefined;
-    const accountAlreadyInGame = activeGames.find(game => game.whitePlayer.username == account.username || game.blackPlayer.username == account.username) != undefined;
-    if (accountAlreadyInQueue || accountAlreadyInGame) return;
+    const accountAlreadyInGame = Array.from(activeGames.values()).find(game => game.whitePlayer.username == account.username || game.blackPlayer.username == account.username) != undefined;
+    if (accountAlreadyInQueue || accountAlreadyInGame) throw new Error("User already in queue");;
 
     accountsInQueue.push(account);
 
@@ -59,43 +60,79 @@ export function startGame(whitePlayer: Account, blackPlayer: Account): void {
 
         board: board,
 
-        currentTurn: Color.White,
-        currentTurnSince: Date.now()
+        currentState: State.WhitePlayersTurn,
+        stateUpdatedAt: Date.now(),
     }
 
-    activeGames.push(game);
+    activeGames.set(game.uuid, game);
+    gameTimeouts.set(game.uuid, setTimeout(() => { updateGameState(game, State.BlackPlayerWinByTime); }, 300000));
 
     emitToUser(whitePlayer.username, "games:gameUpdate", game);
     emitToUser(blackPlayer.username, "games:gameUpdate", game);
 }
 
 /**
- * Moves a the piece at the origin to the destination
+ * Moves the piece at the origin to the destination
+ * Ensures that the user is authorized to move the piece at the current game state
+ * Checks for any game end conditions
+ * Updates the game accordingly
  *
+ * @param uuid: the game uuid
  * @param playerMoving: the account of the player making the move
  * @param origin: the origin of the moving piece
  * @param destination: the destination of the moving piece
  */
-export function movePiece(playerMoving: Account, origin: Position, destination: Position): void {
-    const game = activeGames.find(game => game.whitePlayer.username == playerMoving.username || game.blackPlayer.username == playerMoving.username);
+export function movePiece(uuid: string, playerMoving: Account, origin: Position, destination: Position): void {
+    const game = activeGames.get(uuid);
     if (game == null) throw new Error("Game Not Found");
 
+    //Check that the player is authorized to make the move
     const playersColor = game.whitePlayer.username == playerMoving.username ? Color.White : Color.Black;
-    const timeSpentOnTurn = Date.now() - game.currentTurnSince;
+    const timeSpentOnTurn = Date.now() - game.stateUpdatedAt;
     if (game.board.getPieceAtPosition(origin)?.color != playersColor) throw new Error("Unauthorized: Not your piece");
-    if (game.currentTurn != playersColor) throw new Error("Unauthorized: Not your turn");
-    if ((game.currentTurn == Color.White ? game.whiteTimeRemaining : game.blackTimeRemaining) < timeSpentOnTurn) throw new Error("Unauthorized: No Time Remaining");
+    if (playersColor == Color.White ? game.currentState != State.WhitePlayersTurn : game.currentState != State.BlackPlayersTurn) throw new Error("Unauthorized: Not your turn");
+    if ((playersColor == Color.White ? game.whiteTimeRemaining : game.blackTimeRemaining) < timeSpentOnTurn) throw new Error("Unauthorized: No Time Remaining");
 
     game.board.movePiece(origin, destination, true);
     
-    if (game.currentTurn == Color.White) {
+    //Reduce time
+    if (playersColor == Color.White) {
         game.whiteTimeRemaining = game.whiteTimeRemaining - timeSpentOnTurn;
+        clearTimeout(gameTimeouts.get(game.uuid));
+        gameTimeouts.set(game.uuid, setTimeout(() => { updateGameState(game, State.WhitePlayerWinByTime); }, game.blackTimeRemaining));
     } else {
         game.blackTimeRemaining = game.blackTimeRemaining - timeSpentOnTurn;
+        clearTimeout(gameTimeouts.get(game.uuid));
+        gameTimeouts.set(game.uuid, setTimeout(() => { updateGameState(game, State.BlackPlayerWinByTime); }, game.whiteTimeRemaining));
     }
 
-    game.currentTurn = game.currentTurn == Color.White ? Color.Black : Color.White;
-    game.currentTurnSince = Date.now();
+    //Change the game state
+    if (!game.board.doesColorHaveAnyMoves(playersColor == Color.White ? Color.Black : Color.White)) {
+        updateGameState(game, State.Stalemate);
+    } else if (game.board.isKingInCheckmate(playersColor == Color.White ? Color.Black : Color.White)) {
+        updateGameState(game, playersColor == Color.White ? State.WhitePlayerWinByMate : State.BlackPlayerWinByMate);
+    } else {
+        updateGameState(game, playersColor == Color.White ? State.BlackPlayersTurn : State.WhitePlayersTurn);
+    }
+}
+
+function updateGameState(game: Game, state: State) {
+    game.currentState = state;
+    game.stateUpdatedAt = Date.now();
+
+    if ([State.WhitePlayerWinByMate, 
+        State.WhitePlayerWinByTime, 
+        State.WhitePlayerWinByResignation, 
+        State.BlackPlayerWinByMate, 
+        State.BlackPlayerWinByTime, 
+        State.BlackPlayerWinByResignation, 
+        State.Stalemate, 
+        State.Draw].find(state => state == game.currentState)
+    ) {
+        clearTimeout(gameTimeouts.get(game.uuid));
+        gameTimeouts.delete(game.uuid);
+        activeGames.delete(game.uuid);
+    }
 
     emitToUser(game.whitePlayer.username, "games:gameUpdate", game);
     emitToUser(game.blackPlayer.username, "games:gameUpdate", game);

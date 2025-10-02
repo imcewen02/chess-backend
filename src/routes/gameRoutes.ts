@@ -9,8 +9,8 @@ export function registerGameRoutes(socketServer: Server, socket: Socket) {
         joinQueue(account);
     })
 
-    socket.on("games:movePiece", (origin: Position, destination: Position) => {
+    socket.on("games:movePiece", (uuid: string, origin: Position, destination: Position) => {
         const account = getAccountFromToken(socket.handshake.auth.token);
-        movePiece(account, origin, destination);
+        movePiece(uuid, account, origin, destination);
     })
 }

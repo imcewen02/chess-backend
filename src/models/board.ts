@@ -176,6 +176,25 @@ export class Board {
     }
 
     /**
+     * Checks if the player of the given color has any possible moves
+     *
+     * @param color: the color of the player to check
+     * 
+     * @returns if the player has any possible lagel moves
+     */
+    public doesColorHaveAnyMoves(color: Color): boolean {
+        for (let rank of this.ranks) {
+            for (let file of this.files) {
+                const position: Position = {rank: rank, file: file};
+                const pieceAtPosition = this.getPieceAtPosition(position);
+                if (pieceAtPosition && pieceAtPosition.color == color && pieceAtPosition.getAvailableMoves(this, true)!.length > 0) return true; //any possible legal move means no stalemate
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Converts a file from its string representation to its numeric representation
      * Will return -1 if the file is not found
      *
