@@ -5,6 +5,7 @@ import { Game, State } from "../models/game";
 import { Board } from '../models/board';
 import { Position } from '../models/position';
 import { Color } from '../models/pieces';
+import { ApiError } from '../utils/ApiError';
 
 var accountsInQueue: Account[] = [];
 const activeGames = new Map<string, Game>();
@@ -28,7 +29,7 @@ export function getAllActiveGames(): Map<string, Game> {
 export function joinQueue(account: Account): void {
     const accountAlreadyInQueue = accountsInQueue.find(accountInQueue => accountInQueue.username == account.username) != undefined;
     const accountAlreadyInGame = Array.from(activeGames.values()).find(game => game.whitePlayer.username == account.username || game.blackPlayer.username == account.username) != undefined;
-    if (accountAlreadyInQueue || accountAlreadyInGame) throw new Error("User already in queue");;
+    if (accountAlreadyInQueue || accountAlreadyInGame) throw new ApiError(400, "User already in queue");
 
     accountsInQueue.push(account);
 
@@ -84,14 +85,14 @@ export function startGame(whitePlayer: Account, blackPlayer: Account): void {
  */
 export function movePiece(uuid: string, playerMoving: Account, origin: Position, destination: Position): void {
     const game = activeGames.get(uuid);
-    if (game == null) throw new Error("Game Not Found");
+    if (game == null) throw new ApiError(400, "Game Not Found");
 
     //Check that the player is authorized to make the move
     const playersColor = game.whitePlayer.username == playerMoving.username ? Color.White : Color.Black;
     const timeSpentOnTurn = Date.now() - game.stateUpdatedAt;
-    if (game.board.getPieceAtPosition(origin)?.color != playersColor) throw new Error("Unauthorized: Not your piece");
-    if (playersColor == Color.White ? game.currentState != State.WhitePlayersTurn : game.currentState != State.BlackPlayersTurn) throw new Error("Unauthorized: Not your turn");
-    if ((playersColor == Color.White ? game.whiteTimeRemaining : game.blackTimeRemaining) < timeSpentOnTurn) throw new Error("Unauthorized: No Time Remaining");
+    if (game.board.getPieceAtPosition(origin)?.color != playersColor) throw new ApiError(401, "Unauthorized: Not your piece");
+    if (playersColor == Color.White ? game.currentState != State.WhitePlayersTurn : game.currentState != State.BlackPlayersTurn) throw new ApiError(401, "Unauthorized: Not your turn");
+    if ((playersColor == Color.White ? game.whiteTimeRemaining : game.blackTimeRemaining) < timeSpentOnTurn) throw new ApiError(401, "Unauthorized: No Time Remaining");
 
     game.board.movePiece(origin, destination, true);
     
