@@ -30,6 +30,10 @@ export abstract class Piece {
      * @returns all moves the piece can take (making sure they do not cause check if enabled)
      */
     public abstract getAvailableMoves(board: Board, checkSafe: boolean): Position[] | null;
+
+    public getImageSource(): string {
+        return this.color + "_" + this.name + ".png";
+    }
 }
 
 export class Pawn extends Piece {
@@ -111,12 +115,15 @@ export class Knight extends Piece {
 }
 
 export class Rook extends Piece {
-    constructor(color: Color) {
-        super(Name.Rook, 5, color)
+    private hasMoved: boolean = false;
+
+    constructor(color: Color, hasMoved: boolean) {
+        super(Name.Rook, 5, color);
+        this.hasMoved = hasMoved;
     }
 
     public clone(): Rook {
-        const clone = new Rook(this.color);
+        const clone = new Rook(this.color, this.hasMoved);
         return clone;
     }
 
@@ -133,6 +140,7 @@ export class Rook extends Piece {
                 const pieceAtMovePosition = board.getPieceAtPosition(movePosition);
                 if (pieceAtMovePosition != null) {
                     if (pieceAtMovePosition.color != this.color) possibleMoves.push(movePosition);
+                    if (pieceAtMovePosition.color == this.color && pieceAtMovePosition instanceof King && !pieceAtMovePosition.getHasMoved() && !this.hasMoved && (!checkSafe || !board.isKingInCheck(this.color))) possibleMoves.push(movePosition); //Castling
                     break;
                 } else {
                     possibleMoves.push(movePosition)
@@ -141,13 +149,19 @@ export class Rook extends Piece {
             }
         }
 
-        //TODO: Castling
-
         return !checkSafe ? possibleMoves : possibleMoves.filter(move => {
             const simBoard = board.clone();
             simBoard.movePiece(currentPosition, move, false);
             return !simBoard.isKingInCheck(this.color);
         });
+    }
+
+    public markAsMoved(): void {
+        this.hasMoved = true;
+    }
+
+    public getHasMoved(): boolean {
+        return this.hasMoved;
     }
 }
 
@@ -230,12 +244,15 @@ export class Queen extends Piece {
 }
 
 export class King extends Piece {
-    constructor(color: Color) {
-        super(Name.King, 0, color)
+    private hasMoved: boolean = false;
+
+    constructor(color: Color, hasMoved: boolean) {
+        super(Name.King, 0, color);
+        this.hasMoved = hasMoved;
     }
 
     public clone(): King {
-        const clone = new King(this.color);
+        const clone = new King(this.color, this.hasMoved);
         return clone;
     }
 
@@ -253,13 +270,35 @@ export class King extends Piece {
             if (pieceAtMovePosition == null || pieceAtMovePosition.color != this.color) possibleMoves.push(movePosition);
         }
 
-        //TODO: Castling
+        //Castling
+        if (!this.hasMoved) {
+            const moveDirections = [{rank: 1, file: 0}, {rank: -1, file: 0}, {rank: 0, file: 1}, {rank: 0, file: -1}]
+            for (let moveDirection of moveDirections) {
+                let movePosition: Position = {rank: currentPosition.rank + moveDirection.rank, file: board.numToFile(board.fileToNum(currentPosition.file) + moveDirection.file)};
+                while (board.isPositionValid(movePosition)) {
+                    const pieceAtMovePosition = board.getPieceAtPosition(movePosition);
+                    if (pieceAtMovePosition != null) {
+                        if (pieceAtMovePosition.color == this.color && pieceAtMovePosition instanceof Rook && !pieceAtMovePosition.getHasMoved() && (!checkSafe || !board.isKingInCheck(this.color))) possibleMoves.push(movePosition);
+                        break;
+                    }
+                    movePosition = {rank: movePosition.rank + moveDirection.rank, file: board.numToFile(board.fileToNum(movePosition.file) + moveDirection.file)};
+                }
+            }
+        }
 
         return !checkSafe ? possibleMoves : possibleMoves.filter(move => {
             const simBoard = board.clone();
             simBoard.movePiece(currentPosition, move, false);
             return !simBoard.isKingInCheck(this.color);
         });
+    }
+
+    public markAsMoved(): void {
+        this.hasMoved = true;
+    }
+
+    public getHasMoved(): boolean {
+        return this.hasMoved;
     }
 }
 
@@ -279,15 +318,15 @@ export enum Name {
 
 //Piece Factories
 export const WPawn = (): Piece => (new Pawn(Color.White));
-export const WRook = (): Piece => (new Rook(Color.White));
+export const WRook = (hasMoved: boolean): Piece => (new Rook(Color.White, hasMoved));
 export const WKnight = (): Piece => (new Knight(Color.White));
 export const WBishop = (): Piece => (new Bishop(Color.White));
 export const WQueen = (): Piece => (new Queen(Color.White));
-export const WKing = (): Piece => (new King(Color.White));
+export const WKing = (hasMoved: boolean): Piece => (new King(Color.White, hasMoved));
 
 export const BPawn = (): Piece => (new Pawn(Color.Black));
-export const BRook = (): Piece => (new Rook(Color.Black));
+export const BRook = (hasMoved: boolean): Piece => (new Rook(Color.Black, hasMoved));
 export const BKnight = (): Piece => (new Knight(Color.Black));
 export const BBishop = (): Piece => (new Bishop(Color.Black));
 export const BQueen = (): Piece => (new Queen(Color.Black));
-export const BKing = (): Piece => (new King(Color.Black));
+export const BKing = (hasMoved: boolean): Piece => (new King(Color.Black, hasMoved));

@@ -14,25 +14,25 @@ export class Board {
 					if (!pieceJson) return null;
 					switch (pieceJson.name) {
 						case Name.Pawn: return pieceJson.color == Color.White ? WPawn() : BPawn();
-						case Name.Rook: return pieceJson.color == Color.White ? WRook() : BRook();
+						case Name.Rook: return pieceJson.color == Color.White ? WRook((pieceJson as any).hasMoved) : BRook((pieceJson as any).hasMoved);
 						case Name.Knight: return pieceJson.color == Color.White ? WKnight() : BKnight();
 						case Name.Bishop: return pieceJson.color == Color.White ? WBishop() : BBishop();
 						case Name.Queen: return pieceJson.color == Color.White ? WQueen() : BQueen();
-						case Name.King: return pieceJson.color == Color.White ? WKing() : BKing();
+						case Name.King: return pieceJson.color == Color.White ? WKing((pieceJson as any).hasMoved) : BKing((pieceJson as any).hasMoved);
 						default: throw new Error(`Unknown piece type: ${pieceJson.name}`);
 					}
 				})
 			);
 		} else {
 			this.squares = [
-				[WRook(), WKnight(), WBishop(), WQueen(), WKing(), WBishop(), WKnight(), WRook()],
+				[WRook(false), WKnight(), WBishop(), WQueen(), WKing(false), WBishop(), WKnight(), WRook(false)],
 				[WPawn(), WPawn(), WPawn(), WPawn(), WPawn(), WPawn(), WPawn(), WPawn()],
 				[null, null, null, null, null, null, null, null],
 				[null, null, null, null, null, null, null, null],
 				[null, null, null, null, null, null, null, null],
 				[null, null, null, null, null, null, null, null],
 				[BPawn(), BPawn(), BPawn(), BPawn(), BPawn(), BPawn(), BPawn(), BPawn()],
-				[BRook(), BKnight(), BBishop(), BQueen(), BKing(), BBishop(), BKnight(), BRook()]
+				[BRook(false), BKnight(), BBishop(), BQueen(), BKing(false), BBishop(), BKnight(), BRook(false)]
 			]
 		}
     }
@@ -56,11 +56,28 @@ export class Board {
      */
     public movePiece(origin: Position, destination: Position, checkLegal: boolean): void {
         const movingPiece = this.getPieceAtPosition(origin);
+
         if (movingPiece == null) throw new Error("No Piece at Origin");
         if (checkLegal && !movingPiece.getAvailableMoves(this, true)!.some(move => move.rank == destination.rank && move.file == destination.file)) throw new Error("Move Is Illegal");
 
-        this.squares[destination.rank - 1][this.fileToNum(destination.file)] = movingPiece;
-        this.squares[origin.rank - 1][this.fileToNum(origin.file)] = null;
+        const capturedPiece = this.getPieceAtPosition(destination);
+        if (movingPiece.color == capturedPiece?.color) {
+            //Castling
+            this.squares[origin.rank - 1][this.fileToNum(origin.file)] = null;
+            this.squares[destination.rank - 1][this.fileToNum(destination.file)] = null;
+
+            if (origin.file == 'A' || destination.file == 'A') {
+                this.squares[origin.rank - 1][this.fileToNum('C')] = movingPiece.color == Color.White ? WKing(true) : BKing(true);
+                this.squares[origin.rank - 1][this.fileToNum('D')] = movingPiece.color == Color.White ? WRook(true) : BRook(true);
+            } else {
+                this.squares[origin.rank - 1][this.fileToNum('G')] = movingPiece.color == Color.White ? WKing(true) : BKing(true);
+                this.squares[origin.rank - 1][this.fileToNum('F')] = movingPiece.color == Color.White ? WRook(true) : BRook(true);
+            }
+        } else {
+            //Normal Move
+            this.squares[origin.rank - 1][this.fileToNum(origin.file)] = null;
+            this.squares[destination.rank - 1][this.fileToNum(destination.file)] = movingPiece;
+        }
     }
 
     /**
