@@ -6,6 +6,7 @@ import { Board } from '../models/board';
 import { Position } from '../models/position';
 import { Color } from '../models/pieces';
 import { ApiError } from '../utils/ApiError';
+import { updateAccountsElo } from './accountService';
 
 var accountsInQueue: Account[] = [];
 const activeGames = new Map<string, Game>();
@@ -108,10 +109,10 @@ export function movePiece(uuid: string, playerMoving: Account, origin: Position,
     }
 
     //Change the game state
-    if (!game.board.doesColorHaveAnyMoves(playersColor == Color.White ? Color.Black : Color.White)) {
-        updateGameState(game, State.Stalemate);
-    } else if (game.board.isKingInCheckmate(playersColor == Color.White ? Color.Black : Color.White)) {
+    if (game.board.isKingInCheckmate(playersColor == Color.White ? Color.Black : Color.White)) {
         updateGameState(game, playersColor == Color.White ? State.WhitePlayerWinByMate : State.BlackPlayerWinByMate);
+    } else if (!game.board.doesColorHaveAnyMoves(playersColor == Color.White ? Color.Black : Color.White)) {
+        updateGameState(game, State.Stalemate);
     } else {
         updateGameState(game, playersColor == Color.White ? State.BlackPlayersTurn : State.WhitePlayersTurn);
     }
@@ -133,6 +134,33 @@ function updateGameState(game: Game, state: State) {
         clearTimeout(gameTimeouts.get(game.uuid));
         gameTimeouts.delete(game.uuid);
         activeGames.delete(game.uuid);
+
+        const kFactor = 30;
+        const whitePlayersExpectedScore = 1 / (1 + (10 ** ((game.blackPlayer.elo - game.whitePlayer.elo) / 400)));
+        const blackPlayersExpectedScore = 1 / (1 + (10 ** ((game.whitePlayer.elo - game.blackPlayer.elo) / 400)));
+
+        let whitePlayersScore = 0.5;
+        let blackPlayersScore = 0.5;
+
+        if ([State.WhitePlayerWinByMate, State.WhitePlayerWinByTime, State.WhitePlayerWinByResignation].find(state => state == game.currentState)) {
+            whitePlayersScore = 1;
+            blackPlayersScore = 0;
+        }
+
+        if ([State.BlackPlayerWinByMate, State.BlackPlayerWinByTime, State.BlackPlayerWinByResignation].find(state => state == game.currentState)) {
+            whitePlayersScore = 0;
+            blackPlayersScore = 1;
+        }
+
+        let whitePlayersNewElo = Math.floor(game.whitePlayer.elo + (kFactor * (whitePlayersScore - whitePlayersExpectedScore)));
+        if (whitePlayersNewElo < 0) whitePlayersNewElo = 0;
+        updateAccountsElo(game.whitePlayer, whitePlayersNewElo);
+        game.whitePlayer.elo = whitePlayersNewElo;
+
+        let blackPlayersNewElo = Math.floor(game.blackPlayer.elo + (kFactor * (blackPlayersScore - blackPlayersExpectedScore)));
+        if (blackPlayersNewElo < 0) blackPlayersNewElo = 0;
+        updateAccountsElo(game.blackPlayer, blackPlayersNewElo);
+        game.blackPlayer.elo = blackPlayersNewElo;
     }
 
     emitToUser(game.whitePlayer.username, "games:gameUpdate", game);

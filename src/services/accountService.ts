@@ -5,6 +5,7 @@ import config from "../config/config";
 import { ApiError } from "../utils/ApiError";
 import { getAllActiveGames } from "./gameService";
 import accountRepository from "../repositories/accountRepository"
+import { Account } from "../models/account";
 
 const ASCII_PRINTABLE_REGEX = /^[!-~]+$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -96,6 +97,16 @@ export async function getAccountsActiveGame(req: Request, res: Response): Promis
     const username = req.params.username;
 
     const accountsActiveGame = Array.from(getAllActiveGames().values()).find(game => game.whitePlayer.username == username || game.blackPlayer.username == username);
-    
+
     return res.status(200).send({game: accountsActiveGame});
+}
+
+/**
+ * Updates the elo of the given account
+ * 
+ * @param account the account to update
+ * @param elo the accounts new elo
+ */
+export function updateAccountsElo(account: Account, elo: number): void {
+    accountRepository.updateElo(account.username, elo);
 }

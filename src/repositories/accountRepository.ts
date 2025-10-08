@@ -55,6 +55,22 @@ export class AccountRepository {
 
     await this.pool.query(query, [username, passwordHash, elo, email]);
   }
+
+  /**
+   * Updates the accounts elo
+   * 
+   * @param username The username of the account to update
+   * @param elo The new elo of the account
+   */
+  async updateElo(username: string, elo: number): Promise<void> {
+    const query = `
+      UPDATE ${AccountRepository.TABLE}
+      SET elo = $1
+      WHERE username = $2;
+    `;
+
+    await this.pool.query(query, [elo, username]);
+  }
 }
 
 const accountRepository = new AccountRepository(DB_POOL);
