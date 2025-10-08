@@ -1,4 +1,4 @@
-import { BBishop, BKing, BKnight, BPawn, BQueen, BRook, Color, King, Name, Piece, WBishop, WKing, WKnight, WPawn, WQueen, WRook } from "./pieces";
+import { BBishop, BKing, BKnight, BPassingPawn, BPawn, BQueen, BRook, Color, King, Name, Piece, WBishop, WKing, WKnight, WPassingPawn, WPawn, WQueen, WRook } from "./pieces";
 import { Position } from "./position";
 
 export class Board {
@@ -14,6 +14,7 @@ export class Board {
 					if (!pieceJson) return null;
 					switch (pieceJson.name) {
 						case Name.Pawn: return pieceJson.color == Color.White ? WPawn() : BPawn();
+                        case Name.PassingPawn: return pieceJson.color == Color.White ? WPassingPawn() : BPassingPawn();
 						case Name.Rook: return pieceJson.color == Color.White ? WRook((pieceJson as any).hasMoved) : BRook((pieceJson as any).hasMoved);
 						case Name.Knight: return pieceJson.color == Color.White ? WKnight() : BKnight();
 						case Name.Bishop: return pieceJson.color == Color.White ? WBishop() : BBishop();
@@ -60,6 +61,8 @@ export class Board {
         if (movingPiece == null) throw new Error("No Piece at Origin");
         if (checkLegal && !movingPiece.getAvailableMoves(this, true)!.some(move => move.rank == destination.rank && move.file == destination.file)) throw new Error("Move Is Illegal");
 
+        this.clearAllPassingPawns(movingPiece.color);
+
         const capturedPiece = this.getPieceAtPosition(destination);
         if (movingPiece.color == capturedPiece?.color) {
             //Castling
@@ -73,6 +76,16 @@ export class Board {
                 this.squares[origin.rank - 1][this.fileToNum('G')] = movingPiece.color == Color.White ? WKing(true) : BKing(true);
                 this.squares[origin.rank - 1][this.fileToNum('F')] = movingPiece.color == Color.White ? WRook(true) : BRook(true);
             }
+        } else if (movingPiece.name == Name.Pawn && Math.abs(origin.rank - destination.rank) == 2) {
+            //Pawn Moving Two (leave a passing pawn)
+            this.squares[origin.rank - 1][this.fileToNum(origin.file)] = null;
+            this.squares[movingPiece.color == Color.White ? 2 : 5][this.fileToNum(destination.file)] = movingPiece.color == Color.White ? WPassingPawn() : BPassingPawn();
+            this.squares[destination.rank - 1][this.fileToNum(destination.file)] = movingPiece;
+        } else if (movingPiece.name == Name.Pawn && capturedPiece == null) {
+            //Capture a Passing Pawn
+            this.squares[origin.rank - 1][this.fileToNum(origin.file)] = null;
+            this.squares[destination.rank - 1 + (movingPiece.color == Color.White ? -1 : 1)][this.fileToNum(destination.file)] = null; // capture the passed pawn
+            this.squares[destination.rank - 1][this.fileToNum(destination.file)] = movingPiece;
         } else {
             //Normal Move
             this.squares[origin.rank - 1][this.fileToNum(origin.file)] = null;
@@ -115,11 +128,16 @@ export class Board {
      * Silently handles invalid positions by returning null
      * 
      * @param position: the position to get the piece from
+     * @param returnPassingPawns: optional paramter, which will include passing pawns if true
      * 
      * @returns the piece at the given position or null
      */
-    public getPieceAtPosition(position: Position): Piece | null {
-        return this.isPositionValid(position) ? this.squares[position.rank - 1][this.fileToNum(position.file)] : null;
+    public getPieceAtPosition(position: Position, returnPassingPawns?: boolean): Piece | null {
+        if (!this.isPositionValid(position)) return null;
+
+        const pieceAtPosition = this.squares[position.rank - 1][this.fileToNum(position.file)];
+        if (pieceAtPosition?.name == Name.PassingPawn && returnPassingPawns != true) return null;
+        return pieceAtPosition;
     }
 
     /**
@@ -190,6 +208,21 @@ export class Board {
         }
 
         return true;
+    }
+
+    /**
+     * Removes all passing pawns from the board
+     *
+     * @param color: the color of the passing pawns to remove
+     */
+    private clearAllPassingPawns(color: Color): void {
+        for (let rank of this.ranks) {
+            for (let file of this.files) {
+                const position: Position = {rank: rank, file: file};
+                const pieceAtPosition = this.getPieceAtPosition(position, true);
+                if (pieceAtPosition?.color == color && pieceAtPosition?.name == Name.PassingPawn) this.squares[position.rank - 1][this.fileToNum(position.file)] = null;
+            }
+        }
     }
 
     /**

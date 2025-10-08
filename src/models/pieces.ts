@@ -63,22 +63,35 @@ export class Pawn extends Piece {
         }
 
         const captureLeftMove: Position = {rank: this.color == Color.White ? currentPosition.rank + 1 : currentPosition.rank - 1, file: board.numToFile(board.fileToNum(currentPosition.file) + 1)};
-        if (board.isPositionValid(captureLeftMove) && board.getPieceAtPosition(captureLeftMove) != null && board.getPieceAtPosition(captureLeftMove)?.color != this.color) {
+        if (board.isPositionValid(captureLeftMove) && board.getPieceAtPosition(captureLeftMove, true) != null && board.getPieceAtPosition(captureLeftMove, true)?.color != this.color) {
             possibleMoves.push(captureLeftMove);
         }
 
         const captureRightMove: Position = {rank: this.color == Color.White ? currentPosition.rank + 1 : currentPosition.rank - 1, file: board.numToFile(board.fileToNum(currentPosition.file) - 1)};
-        if (board.isPositionValid(captureRightMove) && board.getPieceAtPosition(captureRightMove) != null && board.getPieceAtPosition(captureRightMove)?.color != this.color) {
+        if (board.isPositionValid(captureRightMove) && board.getPieceAtPosition(captureRightMove, true) != null && board.getPieceAtPosition(captureRightMove, true)?.color != this.color) {
             possibleMoves.push(captureRightMove);
         }
-
-        //TODO: En passant
 
         return !checkSafe ? possibleMoves : possibleMoves.filter(move => {
             const simBoard = board.clone();
             simBoard.movePiece(currentPosition, move, false);
             return !simBoard.isKingInCheck(this.color);
         });
+    }
+}
+
+export class PassingPawn extends Piece {
+    constructor(color: Color) {
+        super(Name.PassingPawn, 1, color);
+    }
+
+    public clone(): PassingPawn {
+        const clone = new PassingPawn(this.color);
+        return clone;
+    }
+
+    public getAvailableMoves(board: Board, checkSafe: boolean): Position[] {
+        return []; //No moves since they dont really exist
     }
 }
 
@@ -309,6 +322,7 @@ export enum Color {
 
 export enum Name {
     Pawn = "pawn",
+    PassingPawn = "passingPawn",
     Rook = "rook",
     Knight = "knight",
     Bishop = "bishop",
@@ -318,6 +332,7 @@ export enum Name {
 
 //Piece Factories
 export const WPawn = (): Piece => (new Pawn(Color.White));
+export const WPassingPawn = (): Piece => (new PassingPawn(Color.White));
 export const WRook = (hasMoved: boolean): Piece => (new Rook(Color.White, hasMoved));
 export const WKnight = (): Piece => (new Knight(Color.White));
 export const WBishop = (): Piece => (new Bishop(Color.White));
@@ -325,6 +340,7 @@ export const WQueen = (): Piece => (new Queen(Color.White));
 export const WKing = (hasMoved: boolean): Piece => (new King(Color.White, hasMoved));
 
 export const BPawn = (): Piece => (new Pawn(Color.Black));
+export const BPassingPawn = (): Piece => (new PassingPawn(Color.Black));
 export const BRook = (hasMoved: boolean): Piece => (new Rook(Color.Black, hasMoved));
 export const BKnight = (): Piece => (new Knight(Color.Black));
 export const BBishop = (): Piece => (new Bishop(Color.Black));
