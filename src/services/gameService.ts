@@ -67,7 +67,7 @@ export function startGame(whitePlayer: Account, blackPlayer: Account): void {
     }
 
     activeGames.set(game.uuid, game);
-    gameTimeouts.set(game.uuid, setTimeout(() => { updateGameState(game, State.BlackPlayerWinByTime); }, 300000));
+    gameTimeouts.set(game.uuid, setTimeout(() => { game.whiteTimeRemaining = 0; updateGameState(game, State.BlackPlayerWinByTime); }, 300000));
 
     emitToUser(whitePlayer.username, "games:gameUpdate", game);
     emitToUser(blackPlayer.username, "games:gameUpdate", game);
@@ -101,11 +101,11 @@ export function movePiece(uuid: string, playerMoving: Account, origin: Position,
     if (playersColor == Color.White) {
         game.whiteTimeRemaining = game.whiteTimeRemaining - timeSpentOnTurn;
         clearTimeout(gameTimeouts.get(game.uuid));
-        gameTimeouts.set(game.uuid, setTimeout(() => { updateGameState(game, State.WhitePlayerWinByTime); }, game.blackTimeRemaining));
+        gameTimeouts.set(game.uuid, setTimeout(() => { game.blackTimeRemaining = 0; updateGameState(game, State.WhitePlayerWinByTime); }, game.blackTimeRemaining));
     } else {
         game.blackTimeRemaining = game.blackTimeRemaining - timeSpentOnTurn;
         clearTimeout(gameTimeouts.get(game.uuid));
-        gameTimeouts.set(game.uuid, setTimeout(() => { updateGameState(game, State.BlackPlayerWinByTime); }, game.whiteTimeRemaining));
+        gameTimeouts.set(game.uuid, setTimeout(() => { game.whiteTimeRemaining = 0; updateGameState(game, State.BlackPlayerWinByTime); }, game.whiteTimeRemaining));
     }
 
     //Change the game state
