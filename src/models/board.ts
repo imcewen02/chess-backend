@@ -61,8 +61,6 @@ export class Board {
         if (movingPiece == null) throw new Error("No Piece at Origin");
         if (checkLegal && !movingPiece.getAvailableMoves(this, true)!.some(move => move.rank == destination.rank && move.file == destination.file)) throw new Error("Move Is Illegal");
 
-        this.clearAllPassingPawns(movingPiece.color);
-
         const capturedPiece = this.getPieceAtPosition(destination);
         if (movingPiece.color == capturedPiece?.color) {
             //Castling
@@ -91,6 +89,8 @@ export class Board {
             this.squares[origin.rank - 1][this.fileToNum(origin.file)] = null;
             this.squares[destination.rank - 1][this.fileToNum(destination.file)] = movingPiece;
         }
+
+        this.clearAllPassingPawns(movingPiece.color == Color.White ? Color.Black : Color.White);
     }
 
     /**
