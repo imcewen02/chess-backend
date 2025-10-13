@@ -1,3 +1,4 @@
+import { ApiError } from "../utils/ApiError";
 import { BBishop, BKing, BKnight, BPassingPawn, BPawn, BQueen, BRook, Color, King, Name, Piece, WBishop, WKing, WKnight, WPassingPawn, WPawn, WQueen, WRook } from "./pieces";
 import { Position } from "./position";
 
@@ -54,15 +55,15 @@ export class Board {
      * @param origin the origin of the moving piece
      * @param destination the destination of the moveing piece
      * @param checkLegal wether to check that the move is legal and check safe (should only be used for simulated moves)
+     * @param promoteTo: the name of the piece to promote to if this is a pawn promotion
      */
-    public movePiece(origin: Position, destination: Position, checkLegal: boolean): void {
+    public movePiece(origin: Position, destination: Position, checkLegal: boolean, promoteTo?: Name): void {
         const movingPiece = this.getPieceAtPosition(origin);
 
-        if (movingPiece == null) throw new Error("No Piece at Origin");
-        if (checkLegal && !movingPiece.getAvailableMoves(this, true)!.some(move => move.rank == destination.rank && move.file == destination.file)) throw new Error("Move Is Illegal");
+        if (movingPiece == null) throw new ApiError(400, "No Piece at Origin");
+        if (checkLegal && !movingPiece.getAvailableMoves(this, true)!.some(move => move.rank == destination.rank && move.file == destination.file)) throw new ApiError(400, "Move Is Illegal");
 
-        const capturedPiece = this.getPieceAtPosition(destination);
-        if (movingPiece.color == capturedPiece?.color) {
+        if (movingPiece.color == this.getPieceAtPosition(destination)?.color) {
             //Castling
             this.squares[origin.rank - 1][this.fileToNum(origin.file)] = null;
             this.squares[destination.rank - 1][this.fileToNum(destination.file)] = null;
@@ -79,11 +80,25 @@ export class Board {
             this.squares[origin.rank - 1][this.fileToNum(origin.file)] = null;
             this.squares[movingPiece.color == Color.White ? 2 : 5][this.fileToNum(destination.file)] = movingPiece.color == Color.White ? WPassingPawn() : BPassingPawn();
             this.squares[destination.rank - 1][this.fileToNum(destination.file)] = movingPiece;
-        } else if (movingPiece.name == Name.Pawn && capturedPiece == null) {
+        } else if (movingPiece.name == Name.Pawn && this.getPieceAtPosition(destination, true)?.name == Name.PassingPawn) {
             //Capture a Passing Pawn
             this.squares[origin.rank - 1][this.fileToNum(origin.file)] = null;
             this.squares[destination.rank - 1 + (movingPiece.color == Color.White ? -1 : 1)][this.fileToNum(destination.file)] = null; // capture the passed pawn
             this.squares[destination.rank - 1][this.fileToNum(destination.file)] = movingPiece;
+        } else if (movingPiece.name == Name.Pawn && destination.rank == (movingPiece.color == Color.White ? 8 : 1)) {
+            //Pawn Promotion
+            if (promoteTo == null || ![Name.Rook, Name.Knight, Name.Bishop, Name.Queen].includes(promoteTo)) promoteTo == Name.Queen; // default to queen because of weird behavior with the checklegal system
+
+            let promotedPiece = null;
+            switch (promoteTo) {
+                case Name.Rook: promotedPiece = movingPiece.color == Color.White ? WRook(true) : BRook(true); break;
+                case Name.Knight: promotedPiece = movingPiece.color == Color.White ? WKnight() : BKnight(); break;
+                case Name.Bishop: promotedPiece = movingPiece.color == Color.White ? WBishop() : BBishop(); break;
+                case Name.Queen: promotedPiece = movingPiece.color == Color.White ? WQueen() : BQueen(); break;
+            }
+    
+            this.squares[origin.rank - 1][this.fileToNum(origin.file)] = null;
+            this.squares[destination.rank - 1][this.fileToNum(destination.file)] = promotedPiece;
         } else {
             //Normal Move
             this.squares[origin.rank - 1][this.fileToNum(origin.file)] = null;

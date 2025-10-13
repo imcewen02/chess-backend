@@ -17,6 +17,7 @@ export interface Game {
 }
 
 export enum State {
+	NotStarted,
 	WhitePlayersTurn,
 	BlackPlayersTurn,
 	WhitePlayerWinByTime,
@@ -28,3 +29,5 @@ export enum State {
 	Stalemate,
 	Draw
 }
+
+export const GAME_OVER_STATES: State[] = [State.WhitePlayerWinByTime, State.BlackPlayerWinByTime, State.WhitePlayerWinByMate, State.BlackPlayerWinByMate, State.WhitePlayerWinByResignation, State.BlackPlayerWinByResignation, State.Draw, State.Stalemate];

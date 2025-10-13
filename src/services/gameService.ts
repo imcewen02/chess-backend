@@ -1,10 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getUsersConnections, emitToUser } from "./socketService";
 import { Account } from "../models/account";
-import { Game, State } from "../models/game";
+import { Game, GAME_OVER_STATES, State } from "../models/game";
 import { Board } from '../models/board';
 import { Position } from '../models/position';
-import { Color } from '../models/pieces';
+import { Color, Name } from '../models/pieces';
 import { ApiError } from '../utils/ApiError';
 import { updateAccountsElo } from './accountService';
 
@@ -55,10 +55,10 @@ export function startGame(whitePlayer: Account, blackPlayer: Account): void {
         uuid: uuidv4(),
 
         whitePlayer: whitePlayer,
-        whiteTimeRemaining: 300000,
+        whiteTimeRemaining: 30000000,
 
         blackPlayer: blackPlayer,
-        blackTimeRemaining: 300000,
+        blackTimeRemaining: 30000000,
 
         board: board,
 
@@ -67,7 +67,7 @@ export function startGame(whitePlayer: Account, blackPlayer: Account): void {
     }
 
     activeGames.set(game.uuid, game);
-    gameTimeouts.set(game.uuid, setTimeout(() => { game.whiteTimeRemaining = 0; updateGameState(game, State.BlackPlayerWinByTime); }, 300000));
+    gameTimeouts.set(game.uuid, setTimeout(() => { game.whiteTimeRemaining = 0; updateGameState(game, State.BlackPlayerWinByTime); }, 30000000));
 
     emitToUser(whitePlayer.username, "games:gameUpdate", game);
     emitToUser(blackPlayer.username, "games:gameUpdate", game);
@@ -83,8 +83,9 @@ export function startGame(whitePlayer: Account, blackPlayer: Account): void {
  * @param playerMoving: the account of the player making the move
  * @param origin: the origin of the moving piece
  * @param destination: the destination of the moving piece
+ * @param promoteTo: the name of the piece to promote to if this is a pawn promotion
  */
-export function movePiece(uuid: string, playerMoving: Account, origin: Position, destination: Position): void {
+export function movePiece(uuid: string, playerMoving: Account, origin: Position, destination: Position, promoteTo?: Name): void {
     const game = activeGames.get(uuid);
     if (game == null) throw new ApiError(400, "Game Not Found");
 
@@ -95,7 +96,7 @@ export function movePiece(uuid: string, playerMoving: Account, origin: Position,
     if (playersColor == Color.White ? game.currentState != State.WhitePlayersTurn : game.currentState != State.BlackPlayersTurn) throw new ApiError(401, "Unauthorized: Not your turn");
     if ((playersColor == Color.White ? game.whiteTimeRemaining : game.blackTimeRemaining) < timeSpentOnTurn) throw new ApiError(401, "Unauthorized: No Time Remaining");
 
-    game.board.movePiece(origin, destination, true);
+    game.board.movePiece(origin, destination, true, promoteTo);
     
     //Reduce time
     if (playersColor == Color.White) {
@@ -122,14 +123,7 @@ function updateGameState(game: Game, state: State) {
     game.currentState = state;
     game.stateUpdatedAt = Date.now();
 
-    if ([State.WhitePlayerWinByMate, 
-        State.WhitePlayerWinByTime, 
-        State.WhitePlayerWinByResignation, 
-        State.BlackPlayerWinByMate, 
-        State.BlackPlayerWinByTime, 
-        State.BlackPlayerWinByResignation, 
-        State.Stalemate, 
-        State.Draw].find(state => state == game.currentState)
+    if (GAME_OVER_STATES.find(state => state == game.currentState)
     ) {
         clearTimeout(gameTimeouts.get(game.uuid));
         gameTimeouts.delete(game.uuid);
