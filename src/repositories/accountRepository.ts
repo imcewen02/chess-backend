@@ -31,7 +31,7 @@ export class AccountRepository {
    */
   async getByUsername(username: string): Promise<Account | null> {
     const query = `
-      SELECT username, password, email, elo
+      SELECT username, password, elo
       FROM ${AccountRepository.TABLE}
       WHERE username = $1
       LIMIT 1;
@@ -47,13 +47,13 @@ export class AccountRepository {
    * @param username The username of the new account.
    * @param passwordHash The hashed password of the new account.
    */
-  async insert(username: string, passwordHash: string, elo: number, email: string): Promise<void> {
+  async insert(username: string, passwordHash: string, elo: number): Promise<void> {
     const query = `
-      INSERT INTO ${AccountRepository.TABLE} (username, password, elo, email)
-      VALUES ($1, $2, $3, $4);
+      INSERT INTO ${AccountRepository.TABLE} (username, password, elo)
+      VALUES ($1, $2, $3);
     `;
 
-    await this.pool.query(query, [username, passwordHash, elo, email]);
+    await this.pool.query(query, [username, passwordHash, elo]);
   }
 
   /**

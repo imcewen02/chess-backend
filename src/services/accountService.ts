@@ -8,7 +8,6 @@ import accountRepository from "../repositories/accountRepository"
 import { Account } from "../models/account";
 
 const ASCII_PRINTABLE_REGEX = /^[!-~]+$/;
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 /**
  * Gets all the current accounts registered
@@ -48,11 +47,8 @@ export async function getUsernameAvailable(req: Request, res: Response): Promise
  * Validates and registers an account
  */
 export async function createAccount(req: Request, res: Response): Promise<Response> {
-    const { email, username, password, experience } = req.body as { email: string; username: string; password: string; experience: number; };
-    if (!email || !username || !password || experience === undefined) throw new ApiError(400, "email, username, password, and experience are required");
-
-    if (email.length > 256) throw new ApiError(400, "email must be 256 characters or less");
-    if (!EMAIL_REGEX.test(email)) throw new ApiError(400, "email invalid");
+    const { username, password, experience } = req.body as { username: string; password: string; experience: number; };
+    if (!username || !password || experience === undefined) throw new ApiError(400, "username, password, and experience are required");
 
     if (username.length > 32 || username.length < 6) throw new ApiError(400, "username must be between 6 and 32 characters");
     if (!ASCII_PRINTABLE_REGEX.test(username)) throw new ApiError(400, "username must only contain ASCII printable characters");
@@ -66,7 +62,7 @@ export async function createAccount(req: Request, res: Response): Promise<Respon
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const elo = (experience + 1) * 300;
-    await accountRepository.insert(username, hashedPassword, elo, email);
+    await accountRepository.insert(username, hashedPassword, elo);
 
     return res.status(201).send();
 }
